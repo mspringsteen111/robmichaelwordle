@@ -236,7 +236,25 @@ with tab_play:
         current_day_data = existing_day
         st.info(f"Editing: {date_str}")
 
-    solution = st.text_input("Solution Word", value=current_day_data["solution"]).upper().strip()
+    # --- SPOILER LOGIC ---
+    # Check how many people have played today
+    players_done_count = len(current_day_data["scores"])
+    total_players = len(data["players"])
+    
+    # Logic: Hide solution if game is "In Progress" (started but not finished)
+    is_in_progress = (players_done_count > 0) and (players_done_count < total_players)
+    
+    # We allow a manual override just in case
+    show_spoiler = st.checkbox("Show Solution (Spoiler warning)", value=False)
+    
+    if is_in_progress and not show_spoiler:
+        # Show as password (masked)
+        st.info("🙈 Solution is hidden until everyone submits.")
+        solution = st.text_input("Solution Word", value=current_day_data["solution"], type="password", disabled=True).upper().strip()
+    else:
+        # Show normally
+        solution = st.text_input("Solution Word", value=current_day_data["solution"]).upper().strip()
+
     st.write("---")
 
     for p_name in data["players"]:
@@ -295,4 +313,5 @@ with tab_library:
     for i, (p, val) in enumerate(data["players"].items()):
         with cols[i]:
             st.subheader(p)
+
             st.write(f"{ICON_FIRE} " + ", ".join(sorted(val["burned"])))
