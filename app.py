@@ -32,18 +32,55 @@ def mobile_friendly_style():
         footer {visibility: hidden;}
         .stDeployButton {display:none;}
         #stDecoration {display:none;}
+        
+        /* Ultra-Compact Spacing for Mobile */
         .block-container {
-            padding-top: 1rem !important;
-            padding-bottom: 3rem !important;
+            padding-top: 0.5rem !important;
+            padding-bottom: 2rem !important;
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
         }
-        h1 { text-align: center; }
+        
+        h1 { text-align: center; margin-bottom: 0px; }
+        
         div.stButton > button {
             width: 100%;
-            border-radius: 12px;
-            height: 3em;
+            border-radius: 8px;
+            height: 2.8em;
             font-weight: bold;
         }
+        
         input { font-size: 16px !important; }
+        
+        /* Compact Stat Box Styling */
+        .stat-box {
+            background-color: #f0f2f6;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        .stat-header {
+            font-weight: 900;
+            font-size: 1.2rem;
+            margin-bottom: 5px;
+            color: #31333F;
+        }
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+        .guess-row {
+            font-family: monospace;
+            font-size: 0.85rem;
+            color: #555;
+            text-align: center;
+            background: #ffffff;
+            padding: 4px;
+            border-radius: 4px;
+        }
         </style>
         """, unsafe_allow_html=True)
 
@@ -179,7 +216,7 @@ data = load_data()
 
 st.title(f"{ICON_PUZZLE} Wordle League")
 
-# SCOREBOARD (With Badges)
+# SCOREBOARD
 sorted_players = sorted(data["players"].items(), key=lambda x: x[1]['score'], reverse=True)
 cols = st.columns(len(sorted_players))
 
@@ -188,13 +225,13 @@ for i, (name, p_data) in enumerate(sorted_players):
     with cols[i]:
         st.markdown(f"""
         <div style="background-color: #f8f9fa; border-radius: 10px; padding: 10px; text-align: center; box-shadow: 2px 2px 5px rgba(0,0,0,0.1); margin-bottom: 15px;">
-            <div style="font-size: 1.8rem; font-weight: 900; color: black; margin-bottom: -5px;">
-                {name} <span style="font-size: 1rem;">{badges_str}</span>
+            <div style="font-size: 1.6rem; font-weight: 900; color: black; margin-bottom: -5px;">
+                {name} <span style="font-size: 0.8rem;">{badges_str}</span>
             </div>
-            <div style="font-size: 3.5rem; font-weight: 800; color: #FF4B4B; line-height: 1.2;">
+            <div style="font-size: 3rem; font-weight: 800; color: #FF4B4B; line-height: 1.1;">
                 {p_data['score']}
             </div>
-            <div style="font-size: 1.1rem; font-weight: bold; color: #006600;">
+            <div style="font-size: 1rem; font-weight: bold; color: #006600;">
                 Streak: {p_data['clean_days']}
             </div>
         </div>
@@ -203,12 +240,11 @@ for i, (name, p_data) in enumerate(sorted_players):
 st.write("---")
 
 # ACTION BAR
-st.caption(f"{ICON_FIRE} **BURN CHECKER**") 
 c1, c2 = st.columns([1, 1])
 with c1:
     search_term = st.text_input("Burn Checker", placeholder="Check word...", label_visibility="collapsed").upper().strip()
 with c2:
-    if st.button(f"{ICON_REFRESH} Check for Updates", use_container_width=True):
+    if st.button(f"{ICON_REFRESH} Updates", use_container_width=True):
         st.cache_data.clear(); st.rerun()
 
 if search_term:
@@ -270,22 +306,21 @@ with tab_play:
                         st.success("Saved!"); st.rerun()
 
 with tab_stats:
-    st.subheader("📊 Performance Analytics")
+    st.subheader("📊 Analytics")
     
     if not data["history"]:
         st.info("Play some games to see stats!")
     else:
-        # 1. SIMPLE STAT LIST (Replaces Bar Chart)
+        # 1. COMPACT STAT CARDS (HTML)
         stat_cols = st.columns(len(data["players"]))
         
         for i, (p_name, p_data) in enumerate(data["players"].items()):
             with stat_cols[i]:
-                st.markdown(f"#### {p_name}")
-                
-                # Calculate simple stats
+                # Calculate Detailed Stats
                 games = 0
                 wins = 0
                 total_guesses = 0
+                head_to_head_wins = 0
                 counts = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0, "Fail":0}
                 
                 for h in data["history"]:
@@ -296,23 +331,37 @@ with tab_stats:
                         if g != "Fail":
                             wins += 1
                             total_guesses += g
-                
+                        
+                        # Head to Head Calc (Bonus Point = Win)
+                        if "winner_log" in h and f"{p_name} (+1)" in h["winner_log"]:
+                            head_to_head_wins += 1
+
                 avg = round(total_guesses / wins, 2) if wins > 0 else 0.0
-                win_pct = int((wins / games) * 100) if games > 0 else 0
                 
-                # Display Stats
-                st.caption("Overview")
-                st.write(f"**Games:** {games}")
-                st.write(f"**Win %:** {win_pct}%")
-                st.write(f"**Avg Guesses:** {avg}")
-                
-                st.caption("Guess Counts")
+                # Format the Guess Bar 
+                # (Creates a string like "1:0 | 2:1 | 3:5 ...")
+                guess_str_parts = []
                 for k in [1, 2, 3, 4, 5, 6, "Fail"]:
-                    # Bold the number, normal the count
-                    if counts[k] > 0:
-                        st.write(f"**{k}:** {counts[k]}")
-                    else:
-                        st.write(f"<span style='color:grey'>{k}: 0</span>", unsafe_allow_html=True)
+                    val = counts[k]
+                    # Highlight numbers that aren't zero
+                    if val > 0: guess_str_parts.append(f"<b>{k}:</b>{val}")
+                    else: guess_str_parts.append(f"<span style='color:#ccc'>{k}:0</span>")
+                guess_bar_html = " &nbsp;|&nbsp; ".join(guess_str_parts)
+
+                # RENDER HTML CARD
+                st.markdown(f"""
+                <div class="stat-box">
+                    <div class="stat-header">{p_name}</div>
+                    <div class="stat-row">
+                        <span>Games: {games}</span>
+                        <span>Avg: {avg}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span style="color:blue">H2H Wins: {head_to_head_wins}</span>
+                    </div>
+                    <div class="guess-row">{guess_bar_html}</div>
+                </div>
+                """, unsafe_allow_html=True)
                 
         st.divider()
 
@@ -333,11 +382,11 @@ with tab_stats:
         if trend_data:
             df_trend = pd.DataFrame(trend_data)
             line_chart = alt.Chart(df_trend).mark_line(point=True).encode(
-                x='Date:T',
+                x=alt.X('Date:T', axis=alt.Axis(format='%b %d')),
                 y='Total Score:Q',
                 color='Player',
                 tooltip=['Date', 'Player', 'Total Score']
-            ).properties(title="Score History (Tug of War)")
+            ).properties(title="Score History")
             st.altair_chart(line_chart, use_container_width=True)
 
 with tab_history:
