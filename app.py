@@ -7,18 +7,22 @@ from streamlit_gsheets import GSheetsConnection
 def mobile_friendly_style():
     st.markdown("""
         <style>
-        /* 1. Hide the Streamlit Header & Footer for a cleaner look */
-        #MainMenu {visibility: hidden;}
+        /* 1. Hide the Streamlit Footer */
         footer {visibility: hidden;}
-        header {visibility: hidden;}
         
-        /* 2. Reduce the massive top padding */
+        /* 2. Hide the "Deploy" button (Clean look) */
+        .stDeployButton {display:none;}
+        
+        /* 3. Remove the colored bar at the top */
+        #stDecoration {display:none;}
+        
+        /* 4. Reduce top padding */
         .block-container {
             padding-top: 1rem !important;
             padding-bottom: 1rem !important;
         }
         
-        /* 3. Make buttons easier to tap on mobile */
+        /* 5. Mobile-friendly Buttons */
         div.stButton > button {
             width: 100%;
             border-radius: 12px;
@@ -26,7 +30,7 @@ def mobile_friendly_style():
             font-weight: bold;
         }
         
-        /* 4. Fix input text zooming on iPhone */
+        /* 6. Prevent iPhone Text Zoom */
         input {
             font-size: 16px !important;
         }
@@ -357,6 +361,7 @@ with tab_library:
             st.subheader(p)
 
             st.write(f"{ICON_FIRE} " + ", ".join(sorted(val["burned"])))
+
 
 
 
