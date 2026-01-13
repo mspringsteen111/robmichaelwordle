@@ -23,22 +23,47 @@ ICON_GEAR = "\u2699\uFE0F"
 
 st.set_page_config(page_title="Wordle Competitive", page_icon=ICON_PUZZLE, layout="wide")
 
-# --- MOBILE STYLING ---
+# --- VISUAL STYLING (Centered Edition) ---
 def mobile_friendly_style():
     st.markdown("""
         <style>
-        /* Hide Footer/Header for clean app look */
+        /* 1. Hide Footer/Header/Deploy/Decoration */
         footer {visibility: hidden;}
         .stDeployButton {display:none;}
         #stDecoration {display:none;}
         
-        /* Compact spacing */
+        /* 2. Compact spacing */
         .block-container {
             padding-top: 1rem !important;
             padding-bottom: 3rem !important;
         }
         
-        /* Mobile-friendly Buttons */
+        /* 3. CENTER THE TITLE */
+        h1 {
+            text-align: center;
+        }
+        
+        /* 4. CENTER THE SCORES */
+        [data-testid="stMetric"] {
+            margin: auto;
+            text-align: center;
+            justify-content: center;
+        }
+        [data-testid="stMetricLabel"] {
+            width: 100%;
+            justify-content: center;
+        }
+        [data-testid="stMetricValue"] {
+            width: 100%;
+            justify-content: center;
+            font-size: 2.5rem !important; /* Make score bigger */
+        }
+        [data-testid="stMetricDelta"] {
+            width: 100%;
+            justify-content: center;
+        }
+
+        /* 5. Mobile-friendly Buttons */
         div.stButton > button {
             width: 100%;
             border-radius: 12px;
@@ -46,13 +71,8 @@ def mobile_friendly_style():
             font-weight: bold;
         }
         
-        /* Input text size fix */
+        /* 6. Input text size fix */
         input { font-size: 16px !important; }
-        
-        /* Metric styling to make scores pop */
-        [data-testid="stMetricValue"] {
-            font-size: 2rem !important;
-        }
         </style>
         """, unsafe_allow_html=True)
 
@@ -65,7 +85,7 @@ def get_connection():
 def load_data():
     conn = get_connection()
     
-    # 1. Load Players
+    # Load Players
     df_players = conn.read(worksheet="players")
     players_dict = {}
     for index, row in df_players.iterrows():
@@ -79,7 +99,7 @@ def load_data():
             "past_solutions": sols_list
         }
 
-    # 2. Load History
+    # Load History
     df_history = conn.read(worksheet="history")
     history_list = []
     
@@ -213,36 +233,36 @@ def recalculate_history(data):
 
 # --- MAIN APP UI ---
 
-# 1. LOAD DATA FIRST
+# 1. LOAD DATA
 data = load_data()
 
-# 2. TITLE & STANDINGS (The "Dashboard")
+# 2. TITLE & DASHBOARD
 st.title(f"{ICON_PUZZLE} Wordle League")
 
 sorted_players = sorted(data["players"].items(), key=lambda x: x[1]['score'], reverse=True)
 
-# Create a row of columns for the scoreboard
+# SCOREBOARD (Centered via CSS)
 cols = st.columns(len(sorted_players))
 for i, (name, p_data) in enumerate(sorted_players):
     with cols[i]:
-        # Big metric display
         st.metric(label=name, value=p_data["score"], delta=f"Streak: {p_data['clean_days']}")
 
 st.write("---")
 
-# 3. ACTION BAR (Burn Search + Update Button)
-# We use columns to put them side-by-side
-c1, c2 = st.columns([3, 1]) # Search bar is 3x wider than the button
+# 3. ACTION BAR (Burn Checker + Refresh)
+# We put a clear Header over the search bar
+st.caption(f"{ICON_FIRE} **BURN CHECKER**") 
+c1, c2 = st.columns([3, 1])
 
 with c1:
-    search_term = st.text_input("🔍 Check Burn Word", placeholder="Type word here...", label_visibility="collapsed").upper().strip()
+    search_term = st.text_input("Burn Checker", placeholder="Type word here...", label_visibility="collapsed").upper().strip()
 
 with c2:
     if st.button(f"{ICON_REFRESH}", help="Check for Updates"):
         st.cache_data.clear()
         st.rerun()
 
-# Instant search results right below the bar
+# Instant search results
 if search_term:
     found_any = False
     res_cols = st.columns(len(data["players"]))
@@ -258,7 +278,7 @@ if search_term:
     st.write("---")
 
 
-# 4. MAIN TABS
+# 4. TABS
 tab_play, tab_history, tab_library = st.tabs([f"{ICON_CALENDAR} Daily", f"{ICON_SCROLL} History", f"{ICON_BOOKS} Library"])
 
 with tab_play:
@@ -345,8 +365,7 @@ with tab_library:
             st.write(f"**{p}** ({len(val['burned'])})")
             st.caption(", ".join(sorted(val["burned"])))
 
-
-# 5. ADMIN / SETTINGS (Moved to bottom)
+# 5. ADMIN
 st.write("")
 st.write("")
 with st.expander(f"{ICON_GEAR} Admin & Roster"):
