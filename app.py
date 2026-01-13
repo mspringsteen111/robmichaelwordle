@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import json
+import altair as alt
 from datetime import date, datetime, timedelta
 from streamlit_gsheets import GSheetsConnection
 
@@ -20,6 +21,7 @@ ICON_SCROLL = "\U0001F4DC"
 ICON_TOOL = "\U0001F6E0"
 ICON_CROSS = "\u274C"
 ICON_GEAR = "\u2699\uFE0F"
+ICON_CHART = "\U0001F4C8"
 
 st.set_page_config(page_title="Wordle Competitive", page_icon=ICON_PUZZLE, layout="wide")
 
@@ -27,29 +29,20 @@ st.set_page_config(page_title="Wordle Competitive", page_icon=ICON_PUZZLE, layou
 def mobile_friendly_style():
     st.markdown("""
         <style>
-        /* 1. Hide Footer/Header/Deploy/Decoration */
         footer {visibility: hidden;}
         .stDeployButton {display:none;}
         #stDecoration {display:none;}
-        
-        /* 2. Compact spacing */
         .block-container {
             padding-top: 1rem !important;
             padding-bottom: 3rem !important;
         }
-        
-        /* 3. CENTER THE TITLE */
         h1 { text-align: center; }
-        
-        /* 4. Mobile-friendly Buttons */
         div.stButton > button {
             width: 100%;
             border-radius: 12px;
             height: 3em;
             font-weight: bold;
         }
-        
-        /* 5. Input text size fix */
         input { font-size: 16px !important; }
         </style>
         """, unsafe_allow_html=True)
@@ -122,20 +115,14 @@ def calculate_day_stats(guesses, wrong_words_str, solution, current_burned_set, 
     base_map = {1: 10, 2: 8, 3: 6, 4: 4, 5: 2, 6: 1, "Fail": 0}
     base = base_map.get(guesses, 0)
     if guesses == "Fail": base = 0
-    penalties = 0
-    penalty_log = []
-    new_burns_for_day = []
+    penalties = 0; penalty_log = []; new_burns_for_day = []
     wrong_words_list = [w.strip().upper() for w in wrong_words_str.split(",") if w.strip()]
     for word in wrong_words_list:
-        if word in current_burned_set:
-            penalties += 2; penalty_log.append(f"{word} (Burned)")
-        elif word in current_solutions_set:
-            penalty_log.append(f"{word} (Grace Used)"); new_burns_for_day.append(word) 
-        else:
-            new_burns_for_day.append(word) 
+        if word in current_burned_set: penalties += 2; penalty_log.append(f"{word} (Burned)")
+        elif word in current_solutions_set: penalty_log.append(f"{word} (Grace Used)"); new_burns_for_day.append(word) 
+        else: new_burns_for_day.append(word) 
     is_clean = (penalties == 0)
-    bonus = 0
-    new_streak_val = current_streak
+    bonus = 0; new_streak_val = current_streak
     if is_clean:
         new_streak_val += 1
         tier = ((new_streak_val - 1) // 7) + 1
@@ -150,8 +137,7 @@ def recalculate_history(data):
     for p in data["players"]: data["players"][p] = {"score": 0, "clean_days": 0, "burned": [], "past_solutions": []}
     chronological = sorted(data["history"], key=lambda x: datetime.strptime(x["date"], "%Y-%m-%d"))
     for day in chronological:
-        sol = day["solution"]
-        daily_perf = {}
+        sol = day["solution"]; daily_perf = {}
         for p_name in data["players"]:
             if p_name in day["scores"]:
                 raw_input = day["scores"][p_name].get("wrong_words_input", "")
@@ -173,31 +159,44 @@ def recalculate_history(data):
     data["history"] = list(reversed(chronological))
     return data
 
-# --- MAIN APP UI ---
+# --- STATS HELPERS ---
+def get_badges(player_name, player_data, history):
+    badges = []
+    # 1. Fire Streak (7+)
+    if player_data["clean_days"] >= 7: badges.append("🔥")
+    
+    # 2. Sniper (Last game was 1 or 2 guesses)
+    if history:
+        last_game = history[0] # History is sorted Descending
+        if player_name in last_game["scores"]:
+            g = last_game["scores"][player_name].get("guesses")
+            if g in [1, 2]: badges.append("🎯")
+            
+    # 3. Ironclad (Last 5 games have 0 penalties)
+    # (Simple logic: just check if 'penalties' key is 0 in last 5 entries)
+    recent_games = [h for h in history[:5] if player_name in h["scores"]]
+    if len(recent_games) >= 3: # Minimum games to qualify
+        penalties = sum([h["scores"][player_name].get("penalties", 0) for h in recent_games])
+        if penalties == 0: badges.append("🛡️")
 
-# 1. LOAD DATA
+    return " ".join(badges)
+
+# --- MAIN APP UI ---
 data = load_data()
 
-# 2. TITLE
 st.title(f"{ICON_PUZZLE} Wordle League")
 
-# 3. CUSTOM SCOREBOARD (HTML injection for exact control)
+# SCOREBOARD (With Badges)
 sorted_players = sorted(data["players"].items(), key=lambda x: x[1]['score'], reverse=True)
 cols = st.columns(len(sorted_players))
 
 for i, (name, p_data) in enumerate(sorted_players):
+    badges_str = get_badges(name, p_data, data["history"])
     with cols[i]:
-        # WE BUILD THE BOX MANUALLY HERE
         st.markdown(f"""
-        <div style="
-            background-color: #f8f9fa; 
-            border-radius: 10px; 
-            padding: 10px; 
-            text-align: center; 
-            box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
-            margin-bottom: 15px;">
-            <div style="font-size: 1.8rem; font-weight: 900; color: black; margin-bottom: -10px;">
-                {name}
+        <div style="background-color: #f8f9fa; border-radius: 10px; padding: 10px; text-align: center; box-shadow: 2px 2px 5px rgba(0,0,0,0.1); margin-bottom: 15px;">
+            <div style="font-size: 1.8rem; font-weight: 900; color: black; margin-bottom: -5px;">
+                {name} <span style="font-size: 1rem;">{badges_str}</span>
             </div>
             <div style="font-size: 3.5rem; font-weight: 800; color: #FF4B4B; line-height: 1.2;">
                 {p_data['score']}
@@ -210,103 +209,133 @@ for i, (name, p_data) in enumerate(sorted_players):
 
 st.write("---")
 
-# 4. ACTION BAR
+# ACTION BAR
 st.caption(f"{ICON_FIRE} **BURN CHECKER**") 
 c1, c2 = st.columns([1, 1])
 with c1:
     search_term = st.text_input("Burn Checker", placeholder="Check word...", label_visibility="collapsed").upper().strip()
 with c2:
     if st.button(f"{ICON_REFRESH} Check for Updates", use_container_width=True):
-        st.cache_data.clear()
-        st.rerun()
+        st.cache_data.clear(); st.rerun()
 
 if search_term:
     found_any = False
     res_cols = st.columns(len(data["players"]))
     for i, (p_name, p_data) in enumerate(data["players"].items()):
         with res_cols[i]:
-            if search_term in p_data["burned"]:
-                st.error(f"{p_name}: BURNED"); found_any = True
-            else:
-                st.success(f"{p_name}: Safe")
+            if search_term in p_data["burned"]: st.error(f"{p_name}: BURNED"); found_any = True
+            else: st.success(f"{p_name}: Safe")
     if not found_any: st.caption(f"'{search_term}' is safe.")
     st.write("---")
 
-# 5. TABS
-tab_play, tab_history, tab_library = st.tabs([f"{ICON_CALENDAR} Daily", f"{ICON_SCROLL} History", f"{ICON_BOOKS} Library"])
+# TABS
+tab_play, tab_stats, tab_history, tab_library = st.tabs([f"{ICON_CALENDAR} Daily", f"{ICON_CHART} Stats", f"{ICON_SCROLL} History", f"{ICON_BOOKS} Library"])
 
 with tab_play:
-    # --- NEW MOBILE DATE NAVIGATION ---
-    if 'curr_date' not in st.session_state:
-        st.session_state.curr_date = date.today()
-
-    # Create 3 columns: Previous Button | Date Display | Next Button
+    if 'curr_date' not in st.session_state: st.session_state.curr_date = date.today()
     d_col1, d_col2, d_col3 = st.columns([1, 2, 1])
-    
     with d_col1:
-        if st.button("◀", use_container_width=True):
-            st.session_state.curr_date -= timedelta(days=1)
-            st.rerun()
+        if st.button("◀", use_container_width=True): st.session_state.curr_date -= timedelta(days=1); st.rerun()
     with d_col3:
-        if st.button("▶", use_container_width=True):
-            st.session_state.curr_date += timedelta(days=1)
-            st.rerun()
+        if st.button("▶", use_container_width=True): st.session_state.curr_date += timedelta(days=1); st.rerun()
     with d_col2:
-        # Display date nicely centered
         st.markdown(f"<h3 style='text-align: center; margin: 0;'>{st.session_state.curr_date.strftime('%b %d')}</h3>", unsafe_allow_html=True)
-        # Small fallback picker if they really need to jump far
-        new_date = st.date_input("Jump to date", value=st.session_state.curr_date, label_visibility="collapsed")
-        if new_date != st.session_state.curr_date:
-            st.session_state.curr_date = new_date
-            st.rerun()
+        new_date = st.date_input("Jump", value=st.session_state.curr_date, label_visibility="collapsed")
+        if new_date != st.session_state.curr_date: st.session_state.curr_date = new_date; st.rerun()
 
     date_str = str(st.session_state.curr_date)
-    # ----------------------------------
-
     existing_day = next((item for item in data["history"] if item["date"] == date_str), None)
-    
-    if not existing_day:
-        current_day_data = {"date": date_str, "solution": "", "victory_awarded": False, "scores": {}}
-    else:
-        current_day_data = existing_day
+    if not existing_day: current_day_data = {"date": date_str, "solution": "", "victory_awarded": False, "scores": {}}
+    else: current_day_data = existing_day
 
     # Spoiler Logic
-    players_done_count = len(current_day_data["scores"])
-    total_players = len(data["players"])
-    is_in_progress = (players_done_count > 0) and (players_done_count < total_players)
+    done_count = len(current_day_data["scores"]); total_p = len(data["players"])
+    in_prog = (done_count > 0) and (done_count < total_p)
     show_spoiler = st.checkbox("Show Solution", value=False)
-    
-    if is_in_progress and not show_spoiler:
+    if in_prog and not show_spoiler:
         st.info("🙈 Solution hidden until all submit.")
         solution = st.text_input("Solution", value=current_day_data["solution"], type="password", disabled=True).upper().strip()
     else:
         solution = st.text_input("Solution", value=current_day_data["solution"]).upper().strip()
-    
     st.write("---")
 
     for p_name in data["players"]:
         has_played = p_name in current_day_data["scores"]
         label = f"{ICON_CHECK} {p_name}: {current_day_data['scores'][p_name]['score']} pts" if has_played else f"{ICON_NOTE} {p_name} (Pending)"
-        
         with st.expander(label, expanded=not has_played):
             with st.form(f"entry_{p_name}"):
                 def_w = current_day_data["scores"][p_name].get("wrong_words_input", "") if has_played else ""
                 guesses = st.radio("Guesses", [1,2,3,4,5,6,"Fail"], index=3, key=f"g_{p_name}_{date_str}", horizontal=True)
                 wrong = st.text_area("Incorrect Words", value=def_w, key=f"w_{p_name}_{date_str}")
-                
                 if st.form_submit_button("Submit"):
-                    if not solution:
-                        st.error("Solution required.")
+                    if not solution: st.error("Solution required.")
                     else:
                         current_day_data["solution"] = solution
                         current_day_data["scores"][p_name] = {"guesses": guesses, "wrong_words_input": wrong, "base": 0, "score": 0}
                         if not existing_day: data["history"].insert(0, current_day_data)
-                        
-                        with st.spinner("Syncing..."):
-                            new_data = recalculate_history(data)
-                            save_data(new_data)
-                        st.success("Saved!")
-                        st.rerun()
+                        with st.spinner("Syncing..."): new_data = recalculate_history(data); save_data(new_data)
+                        st.success("Saved!"); st.rerun()
+
+with tab_stats:
+    st.subheader("📊 Performance Analytics")
+    
+    # PREPARE DATA FOR CHARTS
+    if not data["history"]:
+        st.info("Play some games to see stats!")
+    else:
+        # 1. GUESS DISTRIBUTION (Bar Chart)
+        guess_data = []
+        for h in data["history"]:
+            for p, s in h["scores"].items():
+                g = s.get("guesses")
+                if g != "Fail": guess_data.append({"Player": p, "Guess": g})
+        
+        if guess_data:
+            df_guess = pd.DataFrame(guess_data)
+            chart = alt.Chart(df_guess).mark_bar().encode(
+                x=alt.X('Guess:O', title='Guesses'),
+                y=alt.Y('count()', title='Count'),
+                color='Player',
+                column='Player'
+            ).properties(title="Guess Distribution")
+            st.altair_chart(chart, use_container_width=True)
+
+        st.divider()
+
+        # 2. TUG OF WAR (Line Chart of Cumulative Score)
+        # We need to rebuild the running total from day 1
+        chronological = sorted(data["history"], key=lambda x: datetime.strptime(x["date"], "%Y-%m-%d"))
+        running_scores = {p: 0 for p in data["players"]}
+        trend_data = []
+        
+        for day in chronological:
+            # We must recalculate points for this day to add to running total
+            # Ideally we'd store cumulative in history, but calculating it here is safer for consistency
+            # Simpler approach: Just snapshot the score at that date? 
+            # No, because history entries store "day score", not "total score".
+            # So we sum them up.
+            
+            # Add day scores
+            for p, s in day["scores"].items():
+                running_scores[p] += s["score"]
+            # Add victory bonus
+            if "winner_log" in day and "(+1)" in day["winner_log"]:
+                winner = day["winner_log"].split(" ")[0]
+                if winner in running_scores: running_scores[winner] += 1
+            
+            # Snapshot
+            for p, score in running_scores.items():
+                trend_data.append({"Date": day["date"], "Player": p, "Total Score": score})
+
+        if trend_data:
+            df_trend = pd.DataFrame(trend_data)
+            line_chart = alt.Chart(df_trend).mark_line(point=True).encode(
+                x='Date:T',
+                y='Total Score:Q',
+                color='Player',
+                tooltip=['Date', 'Player', 'Total Score']
+            ).properties(title="Score History (Tug of War)")
+            st.altair_chart(line_chart, use_container_width=True)
 
 with tab_history:
     st.subheader("Match History")
@@ -319,9 +348,7 @@ with tab_history:
                 unique_key = f"del_{h['date']}_{idx}"
                 if st.button(f"{ICON_TRASH}", key=unique_key):
                     data["history"].pop(idx)
-                    with st.spinner("Deleting..."):
-                        data = recalculate_history(data)
-                        save_data(data)
+                    with st.spinner("Deleting..."): data = recalculate_history(data); save_data(data)
                     st.rerun()
             cols = st.columns(len(h["scores"])) if h["scores"] else [st.container()]
             for i, (p, stats) in enumerate(h["scores"].items()):
@@ -340,25 +367,20 @@ with tab_library:
             st.write(f"**{p}** ({len(val['burned'])})")
             st.caption(", ".join(sorted(val["burned"])))
 
-# 6. ADMIN
-st.write("")
-st.write("")
+# ADMIN
+st.write(""); st.write("")
 with st.expander(f"{ICON_GEAR} Admin & Roster"):
-    st.write("Manage Players")
     c_add, c_del = st.columns(2)
     with c_add:
         new_player = st.text_input("New Name")
         if st.button("Add Player"):
             if new_player and new_player not in data["players"]:
                 data["players"][new_player] = {"score": 0, "clean_days": 0, "burned": [], "past_solutions": []}
-                save_data(data)
-                st.rerun()
+                save_data(data); st.rerun()
     with c_del:
         p_edit = st.selectbox("Select Player", options=list(data["players"].keys()))
-        if st.button("Delete Player"):
-            del data["players"][p_edit]; save_data(data); st.rerun()
+        if st.button("Delete Player"): del data["players"][p_edit]; save_data(data); st.rerun()
     st.divider()
     if st.button("⚠️ Force Full Recalculate"):
-        with st.spinner("Replaying History..."):
-            data = recalculate_history(data); save_data(data)
+        with st.spinner("Replaying History..."): data = recalculate_history(data); save_data(data)
         st.success("Done!"); st.rerun()
