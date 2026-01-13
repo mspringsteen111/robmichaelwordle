@@ -23,7 +23,7 @@ ICON_GEAR = "\u2699\uFE0F"
 
 st.set_page_config(page_title="Wordle Competitive", page_icon=ICON_PUZZLE, layout="wide")
 
-# --- VISUAL STYLING (Big Center Edition) ---
+# --- VISUAL STYLING (High Contrast Edition) ---
 def mobile_friendly_style():
     st.markdown("""
         <style>
@@ -39,43 +39,48 @@ def mobile_friendly_style():
         }
         
         /* 3. CENTER THE TITLE */
-        h1 {
-            text-align: center;
-        }
+        h1 { text-align: center; }
         
         /* 4. METRIC CARD STYLING */
         [data-testid="stMetric"] {
             margin: auto;
             text-align: center;
             justify-content: center;
-            background-color: #f0f2f6; /* Optional: light grey box */
-            padding: 10px;
-            border-radius: 10px;
+            background-color: #f8f9fa; /* Very light grey card */
+            padding: 15px;
+            border-radius: 15px;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
         }
         
-        /* PLAYER NAMES (Labels) */
+        /* PLAYER NAMES (Labels) - BIG & BLACK */
         [data-testid="stMetricLabel"] {
             width: 100%;
             justify-content: center !important;
-            font-size: 1.3rem !important; /* BIGGER NAMES */
-            font-weight: 800 !important;   /* BOLDER NAMES */
-            color: #31333F !important;
+            font-size: 2rem !important; /* HUGE NAMES */
+            font-weight: 900 !important;
+            color: #000000 !important;  /* PURE BLACK */
         }
         
-        /* SCORES (Values) */
+        /* SCORES (Values) - RED */
         [data-testid="stMetricValue"] {
             width: 100%;
             justify-content: center !important;
-            font-size: 3rem !important;   /* MASSIVE SCORES */
-            font-weight: 700 !important;
-            color: #FF4B4B !important;    /* Streamlit Red for pop */
+            font-size: 3.5rem !important; /* MASSIVE SCORES */
+            font-weight: 800 !important;
+            color: #FF4B4B !important;    /* Red */
         }
         
-        /* STREAK TEXT (Delta) */
+        /* STREAK TEXT (Delta) - DARK GREEN (Readable) */
         [data-testid="stMetricDelta"] {
             width: 100%;
             justify-content: center !important;
-            font-size: 1rem !important;
+            background-color: transparent !important;
+            color: #006600 !important; /* Dark Green Text */
+            font-size: 1.1rem !important;
+            font-weight: bold !important;
+        }
+        [data-testid="stMetricDelta"] svg {
+            fill: #006600 !important; /* Dark Green Arrow */
         }
         
         /* 5. Mobile-friendly Buttons */
@@ -100,25 +105,18 @@ def get_connection():
 def load_data():
     conn = get_connection()
     
-    # Load Players
     df_players = conn.read(worksheet="players")
     players_dict = {}
     for index, row in df_players.iterrows():
         burned_list = str(row["Burned"]).split("|") if pd.notna(row["Burned"]) and row["Burned"] != "" else []
         sols_list = str(row["Past_Solutions"]).split("|") if pd.notna(row["Past_Solutions"]) and row["Past_Solutions"] != "" else []
-        
         players_dict[row["Name"]] = {
-            "score": int(row["Score"]),
-            "clean_days": int(row["Clean_Days"]),
-            "burned": burned_list,
-            "past_solutions": sols_list
+            "score": int(row["Score"]), "clean_days": int(row["Clean_Days"]),
+            "burned": burned_list, "past_solutions": sols_list
         }
 
-    # Load History
     df_history = conn.read(worksheet="history")
     history_list = []
-    
-    # Bulletproof Date Fix
     df_history["Date"] = pd.to_datetime(df_history["Date"], errors="coerce")
     df_history = df_history.dropna(subset=["Date"])
     df_history = df_history.sort_values(by="Date", ascending=False)
@@ -132,7 +130,6 @@ def load_data():
             "victory_awarded": bool(row["Victory_Awarded"]),
             "scores": scores_data
         })
-
     return {"players": players_dict, "history": history_list}
 
 def save_data(data):
@@ -140,31 +137,23 @@ def save_data(data):
     player_rows = []
     for name, stats in data["players"].items():
         player_rows.append({
-            "Name": name,
-            "Score": stats["score"],
-            "Clean_Days": stats["clean_days"],
-            "Burned": "|".join(stats["burned"]),
-            "Past_Solutions": "|".join(stats["past_solutions"])
+            "Name": name, "Score": stats["score"], "Clean_Days": stats["clean_days"],
+            "Burned": "|".join(stats["burned"]), "Past_Solutions": "|".join(stats["past_solutions"])
         })
     df_p = pd.DataFrame(player_rows)
-    
     history_rows = []
     for h in data["history"]:
         history_rows.append({
-            "Date": h["date"],
-            "Solution": h["solution"],
-            "Winner_Log": h.get("winner_log", ""),
-            "Victory_Awarded": h.get("victory_awarded", False),
+            "Date": h["date"], "Solution": h["solution"],
+            "Winner_Log": h.get("winner_log", ""), "Victory_Awarded": h.get("victory_awarded", False),
             "Scores_JSON": json.dumps(h["scores"])
         })
     df_h = pd.DataFrame(history_rows)
-    
     try:
         conn.update(worksheet="players", data=df_p)
         conn.update(worksheet="history", data=df_h)
     except Exception as e:
         st.error(f"Error saving: {e}")
-    
     st.cache_data.clear()
 
 def guess_from_base(base_score):
@@ -195,7 +184,6 @@ def calculate_day_stats(guesses, wrong_words_str, solution, current_burned_set, 
     is_clean = (penalties == 0)
     bonus = 0
     new_streak_val = current_streak
-    
     if is_clean:
         new_streak_val += 1
         tier = ((new_streak_val - 1) // 7) + 1
@@ -211,7 +199,6 @@ def calculate_day_stats(guesses, wrong_words_str, solution, current_burned_set, 
 def recalculate_history(data):
     for p in data["players"]:
         data["players"][p] = {"score": 0, "clean_days": 0, "burned": [], "past_solutions": []}
-    
     chronological = sorted(data["history"], key=lambda x: datetime.strptime(x["date"], "%Y-%m-%d"))
     
     for day in chronological:
@@ -251,12 +238,12 @@ def recalculate_history(data):
 # 1. LOAD DATA
 data = load_data()
 
-# 2. TITLE & DASHBOARD
+# 2. TITLE
 st.title(f"{ICON_PUZZLE} Wordle League")
 
 sorted_players = sorted(data["players"].items(), key=lambda x: x[1]['score'], reverse=True)
 
-# SCOREBOARD (Centered via CSS)
+# 3. SCOREBOARD (Centered via CSS)
 cols = st.columns(len(sorted_players))
 for i, (name, p_data) in enumerate(sorted_players):
     with cols[i]:
@@ -264,15 +251,16 @@ for i, (name, p_data) in enumerate(sorted_players):
 
 st.write("---")
 
-# 3. ACTION BAR (Burn Checker + Refresh)
-st.caption(f"{ICON_FIRE} **BURN CHECKER**") 
-c1, c2 = st.columns([3, 1])
+# 4. ACTION BAR (Equal Width for Button Visibility)
+# Split 50/50 so the button has room for the text "Check for Updates"
+c1, c2 = st.columns([1, 1])
 
 with c1:
-    search_term = st.text_input("Burn Checker", placeholder="Type word here...", label_visibility="collapsed").upper().strip()
+    search_term = st.text_input("Burn Checker", placeholder="Check word...", label_visibility="collapsed").upper().strip()
 
 with c2:
-    if st.button(f"{ICON_REFRESH}", help="Check for Updates"):
+    # use_container_width=True makes the button fill the whole column (Big and easy to tap)
+    if st.button(f"{ICON_REFRESH} Check for Updates", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
 
@@ -288,11 +276,11 @@ if search_term:
             else:
                 st.success(f"{p_name}: Safe")
     if not found_any:
-        st.caption(f"'{search_term}' is safe for everyone.")
+        st.caption(f"'{search_term}' is safe.")
     st.write("---")
 
 
-# 4. TABS
+# 5. TABS
 tab_play, tab_history, tab_library = st.tabs([f"{ICON_CALENDAR} Daily", f"{ICON_SCROLL} History", f"{ICON_BOOKS} Library"])
 
 with tab_play:
@@ -379,7 +367,7 @@ with tab_library:
             st.write(f"**{p}** ({len(val['burned'])})")
             st.caption(", ".join(sorted(val["burned"])))
 
-# 5. ADMIN
+# 6. ADMIN
 st.write("")
 st.write("")
 with st.expander(f"{ICON_GEAR} Admin & Roster"):
