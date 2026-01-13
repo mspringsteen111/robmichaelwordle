@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import json
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from streamlit_gsheets import GSheetsConnection
 
 # --- ICONS ---
@@ -23,7 +23,7 @@ ICON_GEAR = "\u2699\uFE0F"
 
 st.set_page_config(page_title="Wordle Competitive", page_icon=ICON_PUZZLE, layout="wide")
 
-# --- VISUAL STYLING (High Contrast Edition) ---
+# --- MOBILE STYLING ---
 def mobile_friendly_style():
     st.markdown("""
         <style>
@@ -41,49 +41,7 @@ def mobile_friendly_style():
         /* 3. CENTER THE TITLE */
         h1 { text-align: center; }
         
-        /* 4. METRIC CARD STYLING */
-        [data-testid="stMetric"] {
-            margin: auto;
-            text-align: center;
-            justify-content: center;
-            background-color: #f8f9fa; /* Very light grey card */
-            padding: 15px;
-            border-radius: 15px;
-            box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
-        }
-        
-        /* PLAYER NAMES (Labels) - BIG & BLACK */
-        [data-testid="stMetricLabel"] {
-            width: 100%;
-            justify-content: center !important;
-            font-size: 2rem !important; /* HUGE NAMES */
-            font-weight: 900 !important;
-            color: #000000 !important;  /* PURE BLACK */
-        }
-        
-        /* SCORES (Values) - RED */
-        [data-testid="stMetricValue"] {
-            width: 100%;
-            justify-content: center !important;
-            font-size: 3.5rem !important; /* MASSIVE SCORES */
-            font-weight: 800 !important;
-            color: #FF4B4B !important;    /* Red */
-        }
-        
-        /* STREAK TEXT (Delta) - DARK GREEN (Readable) */
-        [data-testid="stMetricDelta"] {
-            width: 100%;
-            justify-content: center !important;
-            background-color: transparent !important;
-            color: #006600 !important; /* Dark Green Text */
-            font-size: 1.1rem !important;
-            font-weight: bold !important;
-        }
-        [data-testid="stMetricDelta"] svg {
-            fill: #006600 !important; /* Dark Green Arrow */
-        }
-        
-        /* 5. Mobile-friendly Buttons */
+        /* 4. Mobile-friendly Buttons */
         div.stButton > button {
             width: 100%;
             border-radius: 12px;
@@ -91,7 +49,7 @@ def mobile_friendly_style():
             font-weight: bold;
         }
         
-        /* 6. Input text size fix */
+        /* 5. Input text size fix */
         input { font-size: 16px !important; }
         </style>
         """, unsafe_allow_html=True)
@@ -104,7 +62,6 @@ def get_connection():
 
 def load_data():
     conn = get_connection()
-    
     df_players = conn.read(worksheet="players")
     players_dict = {}
     for index, row in df_players.iterrows():
@@ -165,22 +122,17 @@ def calculate_day_stats(guesses, wrong_words_str, solution, current_burned_set, 
     base_map = {1: 10, 2: 8, 3: 6, 4: 4, 5: 2, 6: 1, "Fail": 0}
     base = base_map.get(guesses, 0)
     if guesses == "Fail": base = 0
-    
     penalties = 0
     penalty_log = []
     new_burns_for_day = []
     wrong_words_list = [w.strip().upper() for w in wrong_words_str.split(",") if w.strip()]
-    
     for word in wrong_words_list:
         if word in current_burned_set:
-            penalties += 2
-            penalty_log.append(f"{word} (Burned)")
+            penalties += 2; penalty_log.append(f"{word} (Burned)")
         elif word in current_solutions_set:
-            penalty_log.append(f"{word} (Grace Used)")
-            new_burns_for_day.append(word) 
+            penalty_log.append(f"{word} (Grace Used)"); new_burns_for_day.append(word) 
         else:
             new_burns_for_day.append(word) 
-
     is_clean = (penalties == 0)
     bonus = 0
     new_streak_val = current_streak
@@ -188,19 +140,15 @@ def calculate_day_stats(guesses, wrong_words_str, solution, current_burned_set, 
         new_streak_val += 1
         tier = ((new_streak_val - 1) // 7) + 1
         bonus = tier * 3
-    
-    day_total = base - penalties + bonus
     return {
-        "score": day_total, "base": base, "guesses": guesses, "penalties": penalties,
+        "score": base - penalties + bonus, "base": base, "guesses": guesses, "penalties": penalties,
         "bonus": bonus, "log": penalty_log, "new_burns": new_burns_for_day, 
         "new_streak": new_streak_val, "wrong_words_input": wrong_words_str
     }
 
 def recalculate_history(data):
-    for p in data["players"]:
-        data["players"][p] = {"score": 0, "clean_days": 0, "burned": [], "past_solutions": []}
+    for p in data["players"]: data["players"][p] = {"score": 0, "clean_days": 0, "burned": [], "past_solutions": []}
     chronological = sorted(data["history"], key=lambda x: datetime.strptime(x["date"], "%Y-%m-%d"))
-    
     for day in chronological:
         sol = day["solution"]
         daily_perf = {}
@@ -209,27 +157,19 @@ def recalculate_history(data):
                 raw_input = day["scores"][p_name].get("wrong_words_input", "")
                 raw_guess = day["scores"][p_name].get("guesses", guess_from_base(day["scores"][p_name].get("base", 0)))
                 p_state = data["players"][p_name]
-                
                 stats = calculate_day_stats(raw_guess, raw_input, sol, set(p_state["burned"]), set(p_state["past_solutions"]), p_state["clean_days"])
-                
                 p_state["score"] += stats["score"]
                 p_state["clean_days"] = stats["new_streak"]
                 p_state["burned"].extend(stats["new_burns"])
-                if sol and sol not in p_state["past_solutions"]:
-                    p_state["past_solutions"].append(sol)
+                if sol and sol not in p_state["past_solutions"]: p_state["past_solutions"].append(sol)
                 day["scores"][p_name] = stats
                 daily_perf[p_name] = stats["base"] - stats["penalties"]
-
         if daily_perf:
             max_perf = max(daily_perf.values())
             winners = [p for p, s in daily_perf.items() if s == max_perf]
-            day["winner_log"] = "Tie (No Bonus)"
+            day["winner_log"] = f"{winners[0]} (+1)" if len(winners) == 1 else "Tie (No Bonus)"
             day["victory_awarded"] = True
-            if len(winners) == 1:
-                w = winners[0]
-                day["winner_log"] = f"{w} (+1)"
-                data["players"][w]["score"] += 1
-    
+            if len(winners) == 1: data["players"][winners[0]]["score"] += 1
     data["history"] = list(reversed(chronological))
     return data
 
@@ -241,58 +181,94 @@ data = load_data()
 # 2. TITLE
 st.title(f"{ICON_PUZZLE} Wordle League")
 
+# 3. CUSTOM SCOREBOARD (HTML injection for exact control)
 sorted_players = sorted(data["players"].items(), key=lambda x: x[1]['score'], reverse=True)
-
-# 3. SCOREBOARD (Centered via CSS)
 cols = st.columns(len(sorted_players))
+
 for i, (name, p_data) in enumerate(sorted_players):
     with cols[i]:
-        st.metric(label=name, value=p_data["score"], delta=f"Streak: {p_data['clean_days']}")
+        # WE BUILD THE BOX MANUALLY HERE
+        st.markdown(f"""
+        <div style="
+            background-color: #f8f9fa; 
+            border-radius: 10px; 
+            padding: 10px; 
+            text-align: center; 
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 15px;">
+            <div style="font-size: 1.8rem; font-weight: 900; color: black; margin-bottom: -10px;">
+                {name}
+            </div>
+            <div style="font-size: 3.5rem; font-weight: 800; color: #FF4B4B; line-height: 1.2;">
+                {p_data['score']}
+            </div>
+            <div style="font-size: 1.1rem; font-weight: bold; color: #006600;">
+                Streak: {p_data['clean_days']}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
 st.write("---")
 
-# 4. ACTION BAR (Equal Width for Button Visibility)
-# Split 50/50 so the button has room for the text "Check for Updates"
+# 4. ACTION BAR
+st.caption(f"{ICON_FIRE} **BURN CHECKER**") 
 c1, c2 = st.columns([1, 1])
-
 with c1:
     search_term = st.text_input("Burn Checker", placeholder="Check word...", label_visibility="collapsed").upper().strip()
-
 with c2:
-    # use_container_width=True makes the button fill the whole column (Big and easy to tap)
     if st.button(f"{ICON_REFRESH} Check for Updates", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
 
-# Instant search results
 if search_term:
     found_any = False
     res_cols = st.columns(len(data["players"]))
     for i, (p_name, p_data) in enumerate(data["players"].items()):
         with res_cols[i]:
             if search_term in p_data["burned"]:
-                st.error(f"{p_name}: BURNED")
-                found_any = True
+                st.error(f"{p_name}: BURNED"); found_any = True
             else:
                 st.success(f"{p_name}: Safe")
-    if not found_any:
-        st.caption(f"'{search_term}' is safe.")
+    if not found_any: st.caption(f"'{search_term}' is safe.")
     st.write("---")
-
 
 # 5. TABS
 tab_play, tab_history, tab_library = st.tabs([f"{ICON_CALENDAR} Daily", f"{ICON_SCROLL} History", f"{ICON_BOOKS} Library"])
 
 with tab_play:
-    selected_date = st.date_input("Select Date", value=date.today())
-    date_str = str(selected_date)
+    # --- NEW MOBILE DATE NAVIGATION ---
+    if 'curr_date' not in st.session_state:
+        st.session_state.curr_date = date.today()
+
+    # Create 3 columns: Previous Button | Date Display | Next Button
+    d_col1, d_col2, d_col3 = st.columns([1, 2, 1])
+    
+    with d_col1:
+        if st.button("◀", use_container_width=True):
+            st.session_state.curr_date -= timedelta(days=1)
+            st.rerun()
+    with d_col3:
+        if st.button("▶", use_container_width=True):
+            st.session_state.curr_date += timedelta(days=1)
+            st.rerun()
+    with d_col2:
+        # Display date nicely centered
+        st.markdown(f"<h3 style='text-align: center; margin: 0;'>{st.session_state.curr_date.strftime('%b %d')}</h3>", unsafe_allow_html=True)
+        # Small fallback picker if they really need to jump far
+        new_date = st.date_input("Jump to date", value=st.session_state.curr_date, label_visibility="collapsed")
+        if new_date != st.session_state.curr_date:
+            st.session_state.curr_date = new_date
+            st.rerun()
+
+    date_str = str(st.session_state.curr_date)
+    # ----------------------------------
+
     existing_day = next((item for item in data["history"] if item["date"] == date_str), None)
     
     if not existing_day:
         current_day_data = {"date": date_str, "solution": "", "victory_awarded": False, "scores": {}}
     else:
         current_day_data = existing_day
-        st.caption(f"Editing: {date_str}")
 
     # Spoiler Logic
     players_done_count = len(current_day_data["scores"])
@@ -315,7 +291,6 @@ with tab_play:
         with st.expander(label, expanded=not has_played):
             with st.form(f"entry_{p_name}"):
                 def_w = current_day_data["scores"][p_name].get("wrong_words_input", "") if has_played else ""
-                
                 guesses = st.radio("Guesses", [1,2,3,4,5,6,"Fail"], index=3, key=f"g_{p_name}_{date_str}", horizontal=True)
                 wrong = st.text_area("Incorrect Words", value=def_w, key=f"w_{p_name}_{date_str}")
                 
@@ -340,7 +315,6 @@ with tab_history:
             c1, c2 = st.columns([4, 1])
             c1.write(f"**{h['date']}** | {h['solution']}")
             if "winner_log" in h: c1.caption(f"Result: {h['winner_log']}")
-            
             with c2:
                 unique_key = f"del_{h['date']}_{idx}"
                 if st.button(f"{ICON_TRASH}", key=unique_key):
@@ -349,7 +323,6 @@ with tab_history:
                         data = recalculate_history(data)
                         save_data(data)
                     st.rerun()
-            
             cols = st.columns(len(h["scores"])) if h["scores"] else [st.container()]
             for i, (p, stats) in enumerate(h["scores"].items()):
                 with cols[i]:
@@ -383,14 +356,9 @@ with st.expander(f"{ICON_GEAR} Admin & Roster"):
     with c_del:
         p_edit = st.selectbox("Select Player", options=list(data["players"].keys()))
         if st.button("Delete Player"):
-            del data["players"][p_edit]
-            save_data(data)
-            st.rerun()
-    
+            del data["players"][p_edit]; save_data(data); st.rerun()
     st.divider()
     if st.button("⚠️ Force Full Recalculate"):
         with st.spinner("Replaying History..."):
-            data = recalculate_history(data)
-            save_data(data)
-        st.success("Done!")
-        st.rerun()
+            data = recalculate_history(data); save_data(data)
+        st.success("Done!"); st.rerun()
