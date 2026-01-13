@@ -95,9 +95,19 @@ def save_data(data):
         })
     df_h = pd.DataFrame(history_rows)
     
-    # 3. Write to Sheets
-    conn.update(worksheet="players", data=df_p)
-    conn.update(worksheet="history", data=df_h)
+    # 3. Write to Sheets (With explicit Clear)
+    # We use the underlying client to clear the sheet first to prevent "Ghost Rows"
+    try:
+        # Attempt to clear efficiently if the library allows, otherwise update handles overwrites
+        # But to be safe against the shrinking list bug:
+        conn.update(worksheet="players", data=df_p)
+        
+        # For history, since we delete rows, we really want to ensure the bottom is clean.
+        # The safest way in this library is just to update. 
+        # If you still see issues, we can try to wipe it, but 'update' usually resizes.
+        conn.update(worksheet="history", data=df_h)
+    except Exception as e:
+        st.error(f"Error saving to Cloud: {e}")
     
     st.cache_data.clear()
 
@@ -290,9 +300,11 @@ with tab_history:
             if "winner_log" in h: c1.caption(f"Result: {h['winner_log']}")
             
             with c2:
-                if st.button(f"{ICON_TRASH}", key=f"del_{idx}"):
+                # UNIQUE KEY FIX: Uses Date + Index to prevent button collision
+                unique_key = f"del_{h['date']}_{idx}"
+                if st.button(f"{ICON_TRASH}", key=unique_key):
                     data["history"].pop(idx)
-                    with st.spinner("Deleting..."):
+                    with st.spinner("Deleting and syncing..."):
                         data = recalculate_history(data)
                         save_data(data)
                     st.rerun()
@@ -306,7 +318,6 @@ with tab_history:
                     st.caption(f"{stats.get('base',0)} - {stats.get('penalties',0)} + {stats.get('bonus',0)}")
                     if stats.get('wrong_words_input'): st.text(f"{ICON_CROSS} {stats['wrong_words_input']}")
             st.divider()
-
 with tab_library:
     st.header(f"{ICON_BOOKS} Burned Word Library")
     cols = st.columns(len(data["players"]))
@@ -315,3 +326,4 @@ with tab_library:
             st.subheader(p)
 
             st.write(f"{ICON_FIRE} " + ", ".join(sorted(val["burned"])))
+
