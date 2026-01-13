@@ -162,23 +162,16 @@ def recalculate_history(data):
 # --- STATS HELPERS ---
 def get_badges(player_name, player_data, history):
     badges = []
-    # 1. Fire Streak (7+)
     if player_data["clean_days"] >= 7: badges.append("🔥")
-    
-    # 2. Sniper (Last game was 1 or 2 guesses)
     if history:
-        last_game = history[0] # History is sorted Descending
+        last_game = history[0]
         if player_name in last_game["scores"]:
             g = last_game["scores"][player_name].get("guesses")
             if g in [1, 2]: badges.append("🎯")
-            
-    # 3. Ironclad (Last 5 games have 0 penalties)
-    # (Simple logic: just check if 'penalties' key is 0 in last 5 entries)
     recent_games = [h for h in history[:5] if player_name in h["scores"]]
-    if len(recent_games) >= 3: # Minimum games to qualify
+    if len(recent_games) >= 3:
         penalties = sum([h["scores"][player_name].get("penalties", 0) for h in recent_games])
         if penalties == 0: badges.append("🛡️")
-
     return " ".join(badges)
 
 # --- MAIN APP UI ---
@@ -279,51 +272,61 @@ with tab_play:
 with tab_stats:
     st.subheader("📊 Performance Analytics")
     
-    # PREPARE DATA FOR CHARTS
     if not data["history"]:
         st.info("Play some games to see stats!")
     else:
-        # 1. GUESS DISTRIBUTION (Bar Chart)
-        guess_data = []
-        for h in data["history"]:
-            for p, s in h["scores"].items():
-                g = s.get("guesses")
-                if g != "Fail": guess_data.append({"Player": p, "Guess": g})
+        # 1. SIMPLE STAT LIST (Replaces Bar Chart)
+        stat_cols = st.columns(len(data["players"]))
         
-        if guess_data:
-            df_guess = pd.DataFrame(guess_data)
-            chart = alt.Chart(df_guess).mark_bar().encode(
-                x=alt.X('Guess:O', title='Guesses'),
-                y=alt.Y('count()', title='Count'),
-                color='Player',
-                column='Player'
-            ).properties(title="Guess Distribution")
-            st.altair_chart(chart, use_container_width=True)
-
+        for i, (p_name, p_data) in enumerate(data["players"].items()):
+            with stat_cols[i]:
+                st.markdown(f"#### {p_name}")
+                
+                # Calculate simple stats
+                games = 0
+                wins = 0
+                total_guesses = 0
+                counts = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0, "Fail":0}
+                
+                for h in data["history"]:
+                    if p_name in h["scores"]:
+                        g = h["scores"][p_name].get("guesses")
+                        games += 1
+                        counts[g] += 1
+                        if g != "Fail":
+                            wins += 1
+                            total_guesses += g
+                
+                avg = round(total_guesses / wins, 2) if wins > 0 else 0.0
+                win_pct = int((wins / games) * 100) if games > 0 else 0
+                
+                # Display Stats
+                st.caption("Overview")
+                st.write(f"**Games:** {games}")
+                st.write(f"**Win %:** {win_pct}%")
+                st.write(f"**Avg Guesses:** {avg}")
+                
+                st.caption("Guess Counts")
+                for k in [1, 2, 3, 4, 5, 6, "Fail"]:
+                    # Bold the number, normal the count
+                    if counts[k] > 0:
+                        st.write(f"**{k}:** {counts[k]}")
+                    else:
+                        st.write(f"<span style='color:grey'>{k}: 0</span>", unsafe_allow_html=True)
+                
         st.divider()
 
-        # 2. TUG OF WAR (Line Chart of Cumulative Score)
-        # We need to rebuild the running total from day 1
+        # 2. TUG OF WAR (Line Chart)
         chronological = sorted(data["history"], key=lambda x: datetime.strptime(x["date"], "%Y-%m-%d"))
         running_scores = {p: 0 for p in data["players"]}
         trend_data = []
         
         for day in chronological:
-            # We must recalculate points for this day to add to running total
-            # Ideally we'd store cumulative in history, but calculating it here is safer for consistency
-            # Simpler approach: Just snapshot the score at that date? 
-            # No, because history entries store "day score", not "total score".
-            # So we sum them up.
-            
-            # Add day scores
             for p, s in day["scores"].items():
                 running_scores[p] += s["score"]
-            # Add victory bonus
             if "winner_log" in day and "(+1)" in day["winner_log"]:
                 winner = day["winner_log"].split(" ")[0]
                 if winner in running_scores: running_scores[winner] += 1
-            
-            # Snapshot
             for p, score in running_scores.items():
                 trend_data.append({"Date": day["date"], "Player": p, "Total Score": score})
 
