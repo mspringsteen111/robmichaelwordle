@@ -23,7 +23,7 @@ ICON_GEAR = "\u2699\uFE0F"
 
 st.set_page_config(page_title="Wordle Competitive", page_icon=ICON_PUZZLE, layout="wide")
 
-# --- VISUAL STYLING (Centered Edition) ---
+# --- VISUAL STYLING (Big Center Edition) ---
 def mobile_friendly_style():
     st.markdown("""
         <style>
@@ -43,26 +43,41 @@ def mobile_friendly_style():
             text-align: center;
         }
         
-        /* 4. CENTER THE SCORES */
+        /* 4. METRIC CARD STYLING */
         [data-testid="stMetric"] {
             margin: auto;
             text-align: center;
             justify-content: center;
+            background-color: #f0f2f6; /* Optional: light grey box */
+            padding: 10px;
+            border-radius: 10px;
         }
+        
+        /* PLAYER NAMES (Labels) */
         [data-testid="stMetricLabel"] {
             width: 100%;
-            justify-content: center;
+            justify-content: center !important;
+            font-size: 1.3rem !important; /* BIGGER NAMES */
+            font-weight: 800 !important;   /* BOLDER NAMES */
+            color: #31333F !important;
         }
+        
+        /* SCORES (Values) */
         [data-testid="stMetricValue"] {
             width: 100%;
-            justify-content: center;
-            font-size: 2.5rem !important; /* Make score bigger */
+            justify-content: center !important;
+            font-size: 3rem !important;   /* MASSIVE SCORES */
+            font-weight: 700 !important;
+            color: #FF4B4B !important;    /* Streamlit Red for pop */
         }
+        
+        /* STREAK TEXT (Delta) */
         [data-testid="stMetricDelta"] {
             width: 100%;
-            justify-content: center;
+            justify-content: center !important;
+            font-size: 1rem !important;
         }
-
+        
         /* 5. Mobile-friendly Buttons */
         div.stButton > button {
             width: 100%;
@@ -250,7 +265,6 @@ for i, (name, p_data) in enumerate(sorted_players):
 st.write("---")
 
 # 3. ACTION BAR (Burn Checker + Refresh)
-# We put a clear Header over the search bar
 st.caption(f"{ICON_FIRE} **BURN CHECKER**") 
 c1, c2 = st.columns([3, 1])
 
