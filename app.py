@@ -51,7 +51,7 @@ def mobile_friendly_style():
         
         input { font-size: 16px !important; }
         
-        /* --- NEW STAT BOX CSS --- */
+        /* --- STAT BOX CSS --- */
         .stat-card {
             background-color: #f8f9fa;
             border: 1px solid #e9ecef;
@@ -69,7 +69,6 @@ def mobile_friendly_style():
             padding-bottom: 5px;
         }
         
-        /* Three Column Grid for Top Stats */
         .stat-grid {
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
@@ -92,9 +91,8 @@ def mobile_friendly_style():
             font-weight: 800;
             color: #212529;
         }
-        .stat-value.win { color: #198754; } /* Green for Wins */
+        .stat-value.win { color: #198754; } 
         
-        /* Pill Layout for Guesses */
         .guess-container {
             display: flex;
             flex-wrap: wrap;
@@ -115,7 +113,7 @@ def mobile_friendly_style():
         .guess-pill.zero {
             background-color: transparent;
             border: 1px dashed #e9ecef;
-            color: #adb5bd; /* Faded Grey */
+            color: #adb5bd; 
             box-shadow: none;
         }
         </style>
@@ -260,6 +258,7 @@ cols = st.columns(len(sorted_players))
 for i, (name, p_data) in enumerate(sorted_players):
     badges_str = get_badges(name, p_data, data["history"])
     with cols[i]:
+        # HTML Block - Cleaned Indentation
         st.markdown(f"""
         <div style="background-color: #f8f9fa; border-radius: 10px; padding: 10px; text-align: center; box-shadow: 2px 2px 5px rgba(0,0,0,0.1); margin-bottom: 15px;">
             <div style="font-size: 1.6rem; font-weight: 900; color: black; margin-bottom: -5px;">
@@ -348,16 +347,11 @@ with tab_stats:
     if not data["history"]:
         st.info("Play some games to see stats!")
     else:
-        # 1. NEW CLEAN STAT CARDS
         stat_cols = st.columns(len(data["players"]))
         
         for i, (p_name, p_data) in enumerate(data["players"].items()):
             with stat_cols[i]:
-                # Calculate Detailed Stats
-                games = 0
-                wins = 0
-                total_guesses = 0
-                head_to_head_wins = 0
+                games = 0; wins = 0; total_guesses = 0; head_to_head_wins = 0
                 counts = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0, "Fail":0}
                 
                 for h in data["history"]:
@@ -365,60 +359,41 @@ with tab_stats:
                         g = h["scores"][p_name].get("guesses")
                         games += 1
                         counts[g] += 1
-                        if g != "Fail":
-                            wins += 1
-                            total_guesses += g
-                        
-                        # Head to Head Calc
-                        if "winner_log" in h and f"{p_name} (+1)" in h["winner_log"]:
-                            head_to_head_wins += 1
+                        if g != "Fail": wins += 1; total_guesses += g
+                        if "winner_log" in h and f"{p_name} (+1)" in h["winner_log"]: head_to_head_wins += 1
 
                 avg = round(total_guesses / wins, 2) if wins > 0 else 0.0
                 
-                # Format the Pills (White box for active, transparent/faded for zero)
                 pill_htmls = []
                 for k in [1, 2, 3, 4, 5, 6, "Fail"]:
                     val = counts[k]
-                    css_class = "guess-pill" if val > 0 else "guess-pill zero"
-                    pill_htmls.append(f'<div class="{css_class}">{k}: {val}</div>')
-                pill_container = "".join(pill_htmls)
+                    css = "guess-pill" if val > 0 else "guess-pill zero"
+                    pill_htmls.append(f'<div class="{css}">{k}: {val}</div>')
+                pill_str = "".join(pill_htmls)
 
-                # RENDER HTML CARD
-                st.markdown(f"""
-                <div class="stat-card">
-                    <div class="stat-header">{p_name}</div>
-                    
-                    <div class="stat-grid">
-                        <div class="stat-item">
-                            <span class="stat-label">Games</span>
-                            <span class="stat-value">{games}</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Avg</span>
-                            <span class="stat-value">{avg}</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">H2H</span>
-                            <span class="stat-value win">{head_to_head_wins}</span>
-                        </div>
-                    </div>
-                    
-                    <div class="guess-container">
-                        {pill_container}
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+                # FIX: Removed indentation inside the string to prevent code-block rendering
+                html_block = f"""
+<div class="stat-card">
+    <div class="stat-header">{p_name}</div>
+    <div class="stat-grid">
+        <div class="stat-item"><span class="stat-label">Games</span><span class="stat-value">{games}</span></div>
+        <div class="stat-item"><span class="stat-label">Avg</span><span class="stat-value">{avg}</span></div>
+        <div class="stat-item"><span class="stat-label">H2H</span><span class="stat-value win">{head_to_head_wins}</span></div>
+    </div>
+    <div class="guess-container">{pill_str}</div>
+</div>
+"""
+                st.markdown(html_block, unsafe_allow_html=True)
                 
         st.divider()
 
-        # 2. TUG OF WAR
+        # TUG OF WAR
         chronological = sorted(data["history"], key=lambda x: datetime.strptime(x["date"], "%Y-%m-%d"))
         running_scores = {p: 0 for p in data["players"]}
         trend_data = []
         
         for day in chronological:
-            for p, s in day["scores"].items():
-                running_scores[p] += s["score"]
+            for p, s in day["scores"].items(): running_scores[p] += s["score"]
             if "winner_log" in day and "(+1)" in day["winner_log"]:
                 winner = day["winner_log"].split(" ")[0]
                 if winner in running_scores: running_scores[winner] += 1
