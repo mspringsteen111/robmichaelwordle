@@ -4,6 +4,34 @@ import json
 from datetime import date, datetime
 from streamlit_gsheets import GSheetsConnection
 
+def mobile_friendly_style():
+    st.markdown("""
+        <style>
+        /* 1. Hide the Streamlit Header & Footer for a cleaner look */
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
+        
+        /* 2. Reduce the massive top padding */
+        .block-container {
+            padding-top: 1rem !important;
+            padding-bottom: 1rem !important;
+        }
+        
+        /* 3. Make buttons easier to tap on mobile */
+        div.stButton > button {
+            width: 100%;
+            border-radius: 12px;
+            height: 3em;
+            font-weight: bold;
+        }
+        
+        /* 4. Fix input text zooming on iPhone */
+        input {
+            font-size: 16px !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
 # --- ICONS ---
 ICON_TROPHY = "\U0001F3C6"
 ICON_PUZZLE = "\U0001F9E9"
@@ -21,6 +49,7 @@ ICON_TOOL = "\U0001F6E0"
 ICON_CROSS = "\u274C"
 
 st.set_page_config(page_title="Wordle Competitive", page_icon=ICON_PUZZLE, layout="wide")
+mobile_friendly_style()  # <--- CALL IT HERE
 
 # --- DATA MANAGER (GOOGLE SHEETS) ---
 def get_connection():
@@ -202,6 +231,12 @@ def recalculate_history(data):
 # --- MAIN APP UI ---
 st.title(f"{ICON_PUZZLE} Wordle Competitive: Online")
 
+# --- NEW REFRESH BUTTON (Main Screen) ---
+if st.button(f"{ICON_REFRESH} Check for Updates", key="main_refresh"):
+    st.cache_data.clear()
+    st.rerun()
+# ----------------------------------------
+
 data = load_data()
 
 # --- SIDEBAR ---
@@ -274,7 +309,8 @@ with tab_play:
         with st.expander(label, expanded=not has_played):
             with st.form(f"entry_{p_name}"):
                 def_w = current_day_data["scores"][p_name].get("wrong_words_input", "") if has_played else ""
-                guesses = st.selectbox("Guesses", [1,2,3,4,5,6,"Fail"], index=3, key=f"g_{p_name}_{date_str}")
+               # Horizontal Radio is safe and very mobile friendly
+guesses = st.radio("Guesses", [1,2,3,4,5,6,"Fail"], index=3, key=f"g_{p_name}_{date_str}", horizontal=True)
                 wrong = st.text_area("Incorrect Words", value=def_w, key=f"w_{p_name}_{date_str}")
                 
                 if st.form_submit_button("Submit"):
@@ -326,4 +362,5 @@ with tab_library:
             st.subheader(p)
 
             st.write(f"{ICON_FIRE} " + ", ".join(sorted(val["burned"])))
+
 
