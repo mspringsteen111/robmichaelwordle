@@ -282,24 +282,16 @@ with tab_play:
         st.info(f"Editing: {date_str}")
 
     # --- SPOILER LOGIC ---
-    # Check how many people have played today
     players_done_count = len(current_day_data["scores"])
     total_players = len(data["players"])
-    
-    # Logic: Hide solution if game is "In Progress" (started but not finished)
     is_in_progress = (players_done_count > 0) and (players_done_count < total_players)
-    
-    # We allow a manual override just in case
     show_spoiler = st.checkbox("Show Solution (Spoiler warning)", value=False)
     
     if is_in_progress and not show_spoiler:
-        # Show as password (masked)
         st.info("🙈 Solution is hidden until everyone submits.")
         solution = st.text_input("Solution Word", value=current_day_data["solution"], type="password", disabled=True).upper().strip()
     else:
-        # Show normally
         solution = st.text_input("Solution Word", value=current_day_data["solution"]).upper().strip()
-
     st.write("---")
 
     for p_name in data["players"]:
@@ -309,8 +301,11 @@ with tab_play:
         with st.expander(label, expanded=not has_played):
             with st.form(f"entry_{p_name}"):
                 def_w = current_day_data["scores"][p_name].get("wrong_words_input", "") if has_played else ""
-               # Horizontal Radio is safe and very mobile friendly
-guesses = st.radio("Guesses", [1,2,3,4,5,6,"Fail"], index=3, key=f"g_{p_name}_{date_str}", horizontal=True)
+                
+                # Mobile-friendly horizontal radio buttons
+                guesses = st.radio("Guesses", [1,2,3,4,5,6,"Fail"], index=3, key=f"g_{p_name}_{date_str}", horizontal=True)
+                
+                # This was the line causing the error - now aligned correctly
                 wrong = st.text_area("Incorrect Words", value=def_w, key=f"w_{p_name}_{date_str}")
                 
                 if st.form_submit_button("Submit"):
@@ -362,5 +357,6 @@ with tab_library:
             st.subheader(p)
 
             st.write(f"{ICON_FIRE} " + ", ".join(sorted(val["burned"])))
+
 
 
