@@ -33,7 +33,6 @@ def mobile_friendly_style():
         .stDeployButton {display:none;}
         #stDecoration {display:none;}
         
-        /* Ultra-Compact Spacing for Mobile */
         .block-container {
             padding-top: 0.5rem !important;
             padding-bottom: 2rem !important;
@@ -52,34 +51,72 @@ def mobile_friendly_style():
         
         input { font-size: 16px !important; }
         
-        /* Compact Stat Box Styling */
-        .stat-box {
-            background-color: #f0f2f6;
-            border-radius: 8px;
-            padding: 10px;
-            margin-bottom: 10px;
+        /* --- NEW STAT BOX CSS --- */
+        .stat-card {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
+            padding: 12px;
+            margin-bottom: 15px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
         .stat-header {
+            font-size: 1.3rem;
             font-weight: 900;
-            font-size: 1.2rem;
-            margin-bottom: 5px;
-            color: #31333F;
+            color: #212529;
+            margin-bottom: 10px;
+            border-bottom: 2px solid #e9ecef;
+            padding-bottom: 5px;
         }
-        .stat-row {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.9rem;
-            margin-bottom: 5px;
-            font-weight: 600;
-        }
-        .guess-row {
-            font-family: monospace;
-            font-size: 0.85rem;
-            color: #555;
+        
+        /* Three Column Grid for Top Stats */
+        .stat-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 5px;
+            margin-bottom: 12px;
             text-align: center;
-            background: #ffffff;
-            padding: 4px;
-            border-radius: 4px;
+        }
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+        }
+        .stat-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            color: #6c757d;
+            font-weight: 700;
+        }
+        .stat-value {
+            font-size: 1.2rem;
+            font-weight: 800;
+            color: #212529;
+        }
+        .stat-value.win { color: #198754; } /* Green for Wins */
+        
+        /* Pill Layout for Guesses */
+        .guess-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            justify-content: center;
+        }
+        .guess-pill {
+            background-color: #ffffff;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-family: monospace;
+            font-size: 0.9rem;
+            font-weight: bold;
+            color: #212529;
+            box-shadow: 0 1px 1px rgba(0,0,0,0.05);
+        }
+        .guess-pill.zero {
+            background-color: transparent;
+            border: 1px dashed #e9ecef;
+            color: #adb5bd; /* Faded Grey */
+            box-shadow: none;
         }
         </style>
         """, unsafe_allow_html=True)
@@ -311,7 +348,7 @@ with tab_stats:
     if not data["history"]:
         st.info("Play some games to see stats!")
     else:
-        # 1. COMPACT STAT CARDS (HTML)
+        # 1. NEW CLEAN STAT CARDS
         stat_cols = st.columns(len(data["players"]))
         
         for i, (p_name, p_data) in enumerate(data["players"].items()):
@@ -332,40 +369,49 @@ with tab_stats:
                             wins += 1
                             total_guesses += g
                         
-                        # Head to Head Calc (Bonus Point = Win)
+                        # Head to Head Calc
                         if "winner_log" in h and f"{p_name} (+1)" in h["winner_log"]:
                             head_to_head_wins += 1
 
                 avg = round(total_guesses / wins, 2) if wins > 0 else 0.0
                 
-                # Format the Guess Bar 
-                # (Creates a string like "1:0 | 2:1 | 3:5 ...")
-                guess_str_parts = []
+                # Format the Pills (White box for active, transparent/faded for zero)
+                pill_htmls = []
                 for k in [1, 2, 3, 4, 5, 6, "Fail"]:
                     val = counts[k]
-                    # Highlight numbers that aren't zero
-                    if val > 0: guess_str_parts.append(f"<b>{k}:</b>{val}")
-                    else: guess_str_parts.append(f"<span style='color:#ccc'>{k}:0</span>")
-                guess_bar_html = " &nbsp;|&nbsp; ".join(guess_str_parts)
+                    css_class = "guess-pill" if val > 0 else "guess-pill zero"
+                    pill_htmls.append(f'<div class="{css_class}">{k}: {val}</div>')
+                pill_container = "".join(pill_htmls)
 
                 # RENDER HTML CARD
                 st.markdown(f"""
-                <div class="stat-box">
+                <div class="stat-card">
                     <div class="stat-header">{p_name}</div>
-                    <div class="stat-row">
-                        <span>Games: {games}</span>
-                        <span>Avg: {avg}</span>
+                    
+                    <div class="stat-grid">
+                        <div class="stat-item">
+                            <span class="stat-label">Games</span>
+                            <span class="stat-value">{games}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Avg</span>
+                            <span class="stat-value">{avg}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">H2H</span>
+                            <span class="stat-value win">{head_to_head_wins}</span>
+                        </div>
                     </div>
-                    <div class="stat-row">
-                        <span style="color:blue">H2H Wins: {head_to_head_wins}</span>
+                    
+                    <div class="guess-container">
+                        {pill_container}
                     </div>
-                    <div class="guess-row">{guess_bar_html}</div>
                 </div>
                 """, unsafe_allow_html=True)
                 
         st.divider()
 
-        # 2. TUG OF WAR (Line Chart)
+        # 2. TUG OF WAR
         chronological = sorted(data["history"], key=lambda x: datetime.strptime(x["date"], "%Y-%m-%d"))
         running_scores = {p: 0 for p in data["players"]}
         trend_data = []
