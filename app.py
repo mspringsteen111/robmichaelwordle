@@ -137,17 +137,35 @@ def load_data():
             "burned": burned_list, "past_solutions": sols_list
         }
 
+    # --- SAFER HISTORY LOADING ---
     df_history = conn.read(worksheet="history")
     history_list = []
+    
+    # 1. Convert to Datetime, but turn errors into "NaT" (Not a Time)
     df_history["Date"] = pd.to_datetime(df_history["Date"], errors="coerce")
-    df_history = df_history.dropna(subset=["Date"])
+    
+    # 2. FILL BAD DATES INSTEAD OF DROPPING THEM
+    # If a date is bad, we set it to 1900-01-01 so it drops to the bottom but DOES NOT disappear.
+    if df_history["Date"].isnull().any():
+        st.toast("⚠️ Warning: Some dates were unreadable. They are moved to bottom.", icon="⚠️")
+        df_history["Date"] = df_history["Date"].fillna(pd.Timestamp("1900-01-01"))
+
+    # 3. Sort
     df_history = df_history.sort_values(by="Date", ascending=False)
     
     for index, row in df_history.iterrows():
-        scores_data = json.loads(row["Scores_JSON"])
+        # Safety check for empty JSON
+        raw_json = row["Scores_JSON"]
+        scores_data = {}
+        if pd.notna(raw_json) and str(raw_json).strip() != "":
+            try:
+                scores_data = json.loads(raw_json)
+            except:
+                scores_data = {}
+
         history_list.append({
             "date": row["Date"].strftime("%Y-%m-%d"),
-            "solution": row["Solution"],
+            "solution": row["Solution"] if pd.notna(row["Solution"]) else "?",
             "winner_log": row["Winner_Log"] if pd.notna(row["Winner_Log"]) else "",
             "victory_awarded": bool(row["Victory_Awarded"]),
             "scores": scores_data
@@ -457,3 +475,4 @@ with st.expander(f"{ICON_GEAR} Admin & Roster"):
     if st.button("⚠️ Force Full Recalculate"):
         with st.spinner("Replaying History..."): data = recalculate_history(data); save_data(data)
         st.success("Done!"); st.rerun()
+
