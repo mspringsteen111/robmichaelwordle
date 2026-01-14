@@ -141,20 +141,17 @@ def load_data():
     df_history = conn.read(worksheet="history")
     history_list = []
     
-    # 1. Convert to Datetime, but turn errors into "NaT" (Not a Time)
+    # Convert to Datetime, handle errors
     df_history["Date"] = pd.to_datetime(df_history["Date"], errors="coerce")
     
-    # 2. FILL BAD DATES INSTEAD OF DROPPING THEM
-    # If a date is bad, we set it to 1900-01-01 so it drops to the bottom but DOES NOT disappear.
+    # If bad dates exist, fill with dummy date instead of deleting
     if df_history["Date"].isnull().any():
-        st.toast("⚠️ Warning: Some dates were unreadable. They are moved to bottom.", icon="⚠️")
+        st.toast("⚠️ Warning: Some dates were unreadable. Moved to bottom.", icon="⚠️")
         df_history["Date"] = df_history["Date"].fillna(pd.Timestamp("1900-01-01"))
 
-    # 3. Sort
     df_history = df_history.sort_values(by="Date", ascending=False)
     
     for index, row in df_history.iterrows():
-        # Safety check for empty JSON
         raw_json = row["Scores_JSON"]
         scores_data = {}
         if pd.notna(raw_json) and str(raw_json).strip() != "":
@@ -276,7 +273,6 @@ cols = st.columns(len(sorted_players))
 for i, (name, p_data) in enumerate(sorted_players):
     badges_str = get_badges(name, p_data, data["history"])
     with cols[i]:
-        # HTML Block - Cleaned Indentation
         st.markdown(f"""
         <div style="background-color: #f8f9fa; border-radius: 10px; padding: 10px; text-align: center; box-shadow: 2px 2px 5px rgba(0,0,0,0.1); margin-bottom: 15px;">
             <div style="font-size: 1.6rem; font-weight: 900; color: black; margin-bottom: -5px;">
@@ -301,13 +297,43 @@ with c2:
     if st.button(f"{ICON_REFRESH} Updates", use_container_width=True):
         st.cache_data.clear(); st.rerun()
 
+# --- SMART BURN CHECKER ---
 if search_term:
     found_any = False
     res_cols = st.columns(len(data["players"]))
     for i, (p_name, p_data) in enumerate(data["players"].items()):
         with res_cols[i]:
-            if search_term in p_data["burned"]: st.error(f"{p_name}: BURNED"); found_any = True
-            else: st.success(f"{p_name}: Safe")
+            if search_term in p_data["burned"]:
+                # SCAN HISTORY FOR THE DATE
+                found_date = None
+                for day in data["history"]:
+                    # 1. Was it the solution?
+                    if day["solution"] == search_term:
+                        found_date = day["date"]
+                        break
+                    # 2. Did this player burn it (Grace Used)?
+                    if p_name in day["scores"]:
+                        p_day = day["scores"][p_name]
+                        if "new_burns" in p_day and search_term in p_day["new_burns"]:
+                            found_date = day["date"]
+                            break
+                
+                # Format Date nicely if found
+                date_display = ""
+                if found_date:
+                    try:
+                        # Try to format as "Jan 14, 2026"
+                        dt = datetime.strptime(found_date, "%Y-%m-%d")
+                        date_display = f" on {dt.strftime('%b %d, %Y')}"
+                    except:
+                        date_display = f" ({found_date})"
+                else:
+                    date_display = " (Legacy)"
+
+                st.error(f"{p_name}: BURNED{date_display}")
+                found_any = True
+            else:
+                st.success(f"{p_name}: Safe")
     if not found_any: st.caption(f"'{search_term}' is safe.")
     st.write("---")
 
@@ -389,7 +415,6 @@ with tab_stats:
                     pill_htmls.append(f'<div class="{css}">{k}: {val}</div>')
                 pill_str = "".join(pill_htmls)
 
-                # FIX: Removed indentation inside the string to prevent code-block rendering
                 html_block = f"""
 <div class="stat-card">
     <div class="stat-header">{p_name}</div>
@@ -475,4 +500,3 @@ with st.expander(f"{ICON_GEAR} Admin & Roster"):
     if st.button("⚠️ Force Full Recalculate"):
         with st.spinner("Replaying History..."): data = recalculate_history(data); save_data(data)
         st.success("Done!"); st.rerun()
-
