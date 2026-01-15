@@ -22,6 +22,7 @@ ICON_TOOL = "\U0001F6E0"
 ICON_CROSS = "\u274C"
 ICON_GEAR = "\u2699\uFE0F"
 ICON_CHART = "\U0001F4C8"
+ICON_RULES = "\U0001F4DC"
 
 st.set_page_config(page_title="Wordle Competitive", page_icon=ICON_PUZZLE, layout="wide")
 
@@ -69,9 +70,10 @@ def mobile_friendly_style():
             padding-bottom: 5px;
         }
         
+        /* UPDATED TO 4 COLUMNS TO FIT TIES */
         .stat-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
             gap: 5px;
             margin-bottom: 12px;
             text-align: center;
@@ -81,17 +83,18 @@ def mobile_friendly_style():
             flex-direction: column;
         }
         .stat-label {
-            font-size: 0.75rem;
+            font-size: 0.70rem;
             text-transform: uppercase;
             color: #6c757d;
             font-weight: 700;
         }
         .stat-value {
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             font-weight: 800;
             color: #212529;
         }
         .stat-value.win { color: #198754; } 
+        .stat-value.tie { color: #fd7e14; } /* Orange for Ties */
         
         .guess-container {
             display: flex;
@@ -307,38 +310,34 @@ if search_term:
                 # SCAN HISTORY FOR THE DATE
                 found_date = None
                 for day in data["history"]:
-                    # 1. Was it the solution?
                     if day["solution"] == search_term:
-                        found_date = day["date"]
-                        break
-                    # 2. Did this player burn it (Grace Used)?
+                        found_date = day["date"]; break
                     if p_name in day["scores"]:
                         p_day = day["scores"][p_name]
                         if "new_burns" in p_day and search_term in p_day["new_burns"]:
-                            found_date = day["date"]
-                            break
+                            found_date = day["date"]; break
                 
-                # Format Date nicely if found
                 date_display = ""
                 if found_date:
                     try:
-                        # Try to format as "Jan 14, 2026"
                         dt = datetime.strptime(found_date, "%Y-%m-%d")
                         date_display = f" on {dt.strftime('%b %d, %Y')}"
-                    except:
-                        date_display = f" ({found_date})"
-                else:
-                    date_display = " (Legacy)"
+                    except: date_display = f" ({found_date})"
+                else: date_display = " (Legacy)"
 
-                st.error(f"{p_name}: BURNED{date_display}")
-                found_any = True
-            else:
-                st.success(f"{p_name}: Safe")
+                st.error(f"{p_name}: BURNED{date_display}"); found_any = True
+            else: st.success(f"{p_name}: Safe")
     if not found_any: st.caption(f"'{search_term}' is safe.")
     st.write("---")
 
-# TABS
-tab_play, tab_stats, tab_history, tab_library = st.tabs([f"{ICON_CALENDAR} Daily", f"{ICON_CHART} Stats", f"{ICON_SCROLL} History", f"{ICON_BOOKS} Library"])
+# TABS (Rules Added)
+tab_play, tab_stats, tab_history, tab_rules, tab_library = st.tabs([
+    f"{ICON_CALENDAR} Daily", 
+    f"{ICON_CHART} Stats", 
+    f"{ICON_SCROLL} History", 
+    f"{ICON_RULES} Rules", 
+    f"{ICON_BOOKS} Library"
+])
 
 with tab_play:
     if 'curr_date' not in st.session_state: st.session_state.curr_date = date.today()
@@ -395,7 +394,7 @@ with tab_stats:
         
         for i, (p_name, p_data) in enumerate(data["players"].items()):
             with stat_cols[i]:
-                games = 0; wins = 0; total_guesses = 0; head_to_head_wins = 0
+                games = 0; wins = 0; total_guesses = 0; head_to_head_wins = 0; ties = 0
                 counts = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0, "Fail":0}
                 
                 for h in data["history"]:
@@ -404,7 +403,10 @@ with tab_stats:
                         games += 1
                         counts[g] += 1
                         if g != "Fail": wins += 1; total_guesses += g
-                        if "winner_log" in h and f"{p_name} (+1)" in h["winner_log"]: head_to_head_wins += 1
+                        
+                        w_log = h.get("winner_log", "")
+                        if f"{p_name} (+1)" in w_log: head_to_head_wins += 1
+                        elif "Tie" in w_log: ties += 1
 
                 avg = round(total_guesses / wins, 2) if wins > 0 else 0.0
                 
@@ -422,6 +424,7 @@ with tab_stats:
         <div class="stat-item"><span class="stat-label">Games</span><span class="stat-value">{games}</span></div>
         <div class="stat-item"><span class="stat-label">Avg</span><span class="stat-value">{avg}</span></div>
         <div class="stat-item"><span class="stat-label">H2H</span><span class="stat-value win">{head_to_head_wins}</span></div>
+        <div class="stat-item"><span class="stat-label">Ties</span><span class="stat-value tie">{ties}</span></div>
     </div>
     <div class="guess-container">{pill_str}</div>
 </div>
@@ -474,6 +477,40 @@ with tab_history:
                     st.write(f"{p}: **{total}**")
                     if stats.get('wrong_words_input'): st.caption(f"{ICON_CROSS} {stats['wrong_words_input']}")
             st.divider()
+
+with tab_rules:
+    st.header(f"{ICON_RULES} League Rules & Scoring")
+    
+    st.subheader("1. Base Scoring")
+    st.markdown("""
+    Points are awarded based on how quickly you solve the Wordle:
+    * **1 Guess:** 10 pts
+    * **2 Guesses:** 8 pts
+    * **3 Guesses:** 6 pts
+    * **4 Guesses:** 4 pts
+    * **5 Guesses:** 2 pts
+    * **6 Guesses:** 1 pt
+    * **Fail:** 0 pts
+    """)
+    
+    st.subheader("2. Penalties")
+    st.markdown("""
+    * **Burned Word Penalty:** **-2 pts** per word.
+    * *Definition:* Entering a word in the "Incorrect Words" box that has **already been a solution** or was previously burned by another player.
+    * *Grace Rule:* If you accidentally reuse a past solution, it is added to your burn list but you are not penalized points (Grace Used).
+    """)
+    
+    st.subheader("3. Bonuses")
+    st.markdown("""
+    * **Daily Victory:** **+1 pt** for the player with the highest daily score (Base - Penalties + Streak).
+    * *Tie Rule:* If scores are tied, no victory point is awarded.
+    
+    * **Clean Streak Bonus:**
+        * If you have **0 Penalties** for the day, your Streak increases by 1.
+        * **Tier 1 (Days 1-7):** +3 pts per day.
+        * **Tier 2 (Days 8-14):** +6 pts per day.
+        * **Tier 3 (Days 15+):** +9 pts per day.
+    """)
 
 with tab_library:
     st.subheader("Burned Word Library")
